@@ -76,7 +76,7 @@ public class Demo1 {
 
 ### 3.1 `ThreadLocal`的设计
 
-但是，JDK后面优化了设计方案，在JDK8中` ThreadLocal`的设计是：每个Thread维护一个`ThreadLocalMap`，这个Map的key是`ThreadLocal`实例本身，value才是真正要存储的值Object。
+但是，`JDK`后面优化了设计方案，在`JDK8`中` ThreadLocal`的设计是：每个Thread维护一个`ThreadLocalMap`，这个Map的key是`ThreadLocal`实例本身，value才是真正要存储的值Object。
 
 具体的过程是这样的：
 
