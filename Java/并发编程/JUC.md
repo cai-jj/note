@@ -356,6 +356,367 @@ static class Entry extends WeakReference<ThreadLocal<?>> {
 
 一个自定义的线程池应该包含线程池集合、核心线程数、阻塞队列、超时时间
 
+# ReentrantLock
+
+`ReentrantLock`特点:
+
++ 可中断
++ 可以设置超时时间
++ 可以设置为公平锁
++ 支持多个条件变量
++ 可重入
+
+`synchronized`也是可重入的
+
+可重入是指同一个线程如果首次获得了这把锁，那么因为它是这把锁的拥有者，因此有权利再次获取这把锁
+
+如果是不可重入锁，那么第二次获得锁时，自己也会被锁挡住
+
+**基本语法**
+
+```java
+// 获取锁
+reentrantLock.lock();
+try {
+ // 临界区
+} finally {
+ // 释放锁
+ reentrantLock.unlock();
+}
+```
+
+## 1. 可重入
+
+```
+/**
+ * ReentrantLock可重入特性
+ */
+@Slf4j
+public class Demo1 {
+    private static ReentrantLock lock = new ReentrantLock();
+    public static void main(String[] args) {
+        lock.lock();
+        try {
+            log.debug("enter main");
+            m1();
+        } finally {
+            lock.unlock();
+        }
+    }
+    private static void m1() {
+        lock.lock();
+        try {
+            log.debug("enter m1");
+            m2();
+        } finally {
+            lock.unlock();
+        }
+    }
+    private static void m2() {
+        lock.lock();
+        try {
+            log.debug("enter m2");
+        } finally {
+            lock.unlock();
+        }
+    }
+}
+```
+
+## 2. 可中断
+
+```
+/**
+ * ReentrantLock可以被中断，使用的是lockInterruptibly()方法，而非lock方法
+ */
+@Slf4j
+public class Demo2 {
+    private static ReentrantLock lock = new ReentrantLock();
+    public static void main(String[] args) {
+        Thread t1 = new Thread(() -> {
+            log.debug("尝试获得锁");
+//            lock.lock(); // 不可以被打断
+            try {
+                lock.lockInterruptibly(); //可以被打断
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+                log.debug("等锁的过程被打断");
+                return;
+            }
+            try {
+                log.debug("获得了锁");
+            } finally {
+                lock.unlock();
+            }
+        }, "t1");
+        lock.lock();
+        log.debug("获得了锁");
+        t1.start();
+        try {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            t1.interrupt();
+            log.debug("执行打断");
+        } finally {
+            log.debug("释放锁");
+            lock.unlock();
+        }
+    }
+}
+```
+
+## 3. 可以设置超时时间
+
+```
+/**
+ * ReentrantLock设置超时时间
+ */
+@Slf4j
+public class Demo3 {
+    private static ReentrantLock lock = new ReentrantLock();
+    public static void main(String[] args) {
+        Thread t1 = new Thread(() -> {
+            try {
+                if (!lock.tryLock(2, TimeUnit.SECONDS)) { //两秒内尝试获得锁
+                    log.debug("没有获得锁");
+                    return;
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+                log.debug("被打断"); //被打断直接返回
+                return;
+            }
+            try {
+                log.debug("获得锁");
+            } finally {
+                log.debug("释放锁");
+                lock.unlock();
+            }
+        }, "t1");
+        log.debug("获得锁");
+        lock.lock();
+        t1.start();
+        try {
+            Thread.sleep(1000);
+//            t1.interrupt();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } finally {
+            log.debug("释放锁");
+            lock.unlock();
+        }
+    }
+}
+```
+
+锁设置超时时间可以解决哲学家进餐问题
+
+```
+/**
+ * ReentrantLock解决哲学家进餐问题
+ */
+@Slf4j
+public class Demo4 {
+    public static void main(String[] args) {
+        Chopstick c1 = new Chopstick("1");
+        Chopstick c2 = new Chopstick("2");
+        Chopstick c3 = new Chopstick("3");
+        Chopstick c4 = new Chopstick("4");
+        Chopstick c5 = new Chopstick("5");
+        new Philosopher("苏格拉底", c1, c2).start();
+        new Philosopher("柏拉图", c2, c3).start();
+        new Philosopher("亚里士多德", c3, c4).start();
+        new Philosopher("赫拉克利特", c4, c5).start();
+        new Philosopher("阿基米德", c5, c1).start();
+    }
+}
+
+class Chopstick extends ReentrantLock {
+    String name;
+    public Chopstick(String name) {
+        this.name = name;
+    }
+    @Override
+    public String toString() {
+        return "筷子{" + name + '}';
+    }
+}
+
+@Slf4j
+class Philosopher extends Thread {
+    Chopstick left;
+    Chopstick right;
+    public Philosopher(String name, Chopstick left, Chopstick right) {
+        super(name);
+        this.left = left;
+        this.right = right;
+    }
+    private void eat() {
+        log.debug("eating...");
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+    @Override
+    public void run() {
+        while (true) {
+            // 获得左手筷子
+            if (left.tryLock()) { //尝试获得锁，锁超时就会释放，不会一直持有该锁
+                try {
+                    // 获得右手筷子
+                    if (right.tryLock()) {
+                        try {
+                            // 吃饭
+                            eat();
+                        } finally {
+                            //释放右手筷子
+                            right.unlock();
+                        }
+                    }
+                } finally {
+                    //释放左手筷子
+                    left.unlock();
+                }
+            }
+        }
+    }
+}
+```
+
+## 4. 锁公平
+
+`ReentrantLock` 默认是不公平的
+
+```
+ReentrantLock lock = new ReentrantLock(false);  //默认是false，不公平
+ReentrantLock lock = new ReentrantLock(true);  //可以设置true，表示公平
+```
+
+补充
+
+## 5. 支持多个条件变量
+
+`ReentrantLock` 支持多个条件变量，将不同条件变量放入不同的`Condition`，而`synchronized`是将条件不满足的线程都放入 相同的`waitSet`，`ReentrantLock` 的条件变量比 synchronized 强大之处在于，它是支持多个条件变量的，这就好比
+
++ `synchronized `是那些不满足条件的线程都在一间休息室等消息
+
+-  `ReentrantLock` 支持多间休息室，有专门等烟的休息室、专门等早餐的休息室、唤醒时也是按休息室来唤醒
+
+使用要点：
+
+- `await` 前需要获得锁
+- `await` 执行后，会释放锁，进入 `conditionObject` 等待
+- `await` 的线程被唤醒（或打断、或超时）取重新竞争 `lock` 锁
+- 竞争 `lock` 锁成功后，从 `await` 后继续执行
+
+```
+public class Demo6 {
+    static ReentrantLock lock = new ReentrantLock();
+    public static void main(String[] args) {
+        Condition c1 = lock.newCondition(); 
+        Condition c2 = lock.newCondition(); // 可以使用多个条件变量
+        lock.lock(); //获得锁
+        try {
+            c1.await(); // 调用await前需要获得锁
+            //await 执行后，会释放锁，进入 conditionObject 等待
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        c1.signal(); //await 的线程被唤醒（或打断、或超时）取重新竞争 lock 锁
+    }
+}
+```
+
+**例子：**
+
+```
+@Slf4j
+public class Demo5 {
+    static boolean hasCigarette = false;
+    static boolean hasTakeout = false;
+    static ReentrantLock lock = new ReentrantLock();
+    static Condition waitCigarette = lock.newCondition(); //等烟条件
+    static Condition waithasTakeout = lock.newCondition(); //等外卖条件
+    public static void main(String[] args) throws InterruptedException {
+        new Thread(() -> {
+            lock.lock(); //获得锁
+            try {
+                log.debug("有烟没？[{}]", hasCigarette);
+                while (!hasCigarette) {
+                    log.debug("没烟，先歇会！");
+                    try {
+                        waitCigarette.await(); // 必须先获得锁，再执行await
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+                log.debug("有烟没？[{}]", hasCigarette);
+                if (hasCigarette) {
+                    log.debug("可以开始干活了");
+                } else {
+                    log.debug("没干成活...");
+                }
+            } finally {
+                lock.unlock();
+            }
+        }, "小南").start();
+        new Thread(() -> {
+            lock.lock();
+            try {
+                log.debug("外卖送到没？[{}]", hasTakeout);
+                while (!hasTakeout) {
+                    log.debug("没外卖，先歇会！");
+                    try {
+                        waithasTakeout.await();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+                log.debug("外卖送到没？[{}]", hasTakeout);
+                if (hasTakeout) {
+                    log.debug("可以开始干活了");
+                } else {
+                    log.debug("没干成活...");
+                }
+            } finally {
+                lock.unlock();
+            }
+
+        }, "小女").start();
+        Thread.sleep(1000);
+        new Thread(()->{
+            lock.lock();
+            try {
+                hasTakeout = true;
+                log.debug("外卖到了");
+                waithasTakeout.signal();
+            } finally {
+                lock.unlock();
+            }
+        },"送外卖的").start();
+        Thread.sleep(1000);
+        new Thread(()->{
+            lock.lock();
+            try {
+                hasCigarette = true;
+                log.debug("烟到了");
+                waitCigarette.signal();
+            } finally {
+                lock.unlock();
+            }
+        },"送烟的").start();
+
+    }
+}
+```
+
+
+
 # RenntrantLock原理
 
 ![1702003036488](https://note-1322176778.cos.ap-guangzhou.myqcloud.com/java/juc/1702003036488.png)
