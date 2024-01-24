@@ -54,8 +54,27 @@
   
   + MySQL （小林coding + MySQL书籍）
   
+    + 索引
+  
+    + 锁
+    + 事务
+    + 内存
+    + 日志
+  
   + Redis（小林coding + redis设计与实现+ redis视频）
     + 原理
+    
+      + 数据类型、数据结构、应用
+      + 缓存
+    
+      + 过期键淘汰策略
+      + 内存淘汰策略
+      + 线程模型
+    
+      + 持久化
+      + 哨兵
+      + 集群
+    
     + 应用
     
   + 计算机网络（小林coding）
@@ -75,7 +94,7 @@
     + Spring
     + SpringMVC
     + SpringCloud
-
+  
 + 工具
 
   + git

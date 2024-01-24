@@ -256,14 +256,14 @@ JDK 1.7 为什么要将字符串常量池移动到堆中？
 主要是因为永久代（方法区实现）的 GC 回收效率太低，只有在整堆收集 (Full GC)的时候才会被执行 GC。Java 程序中通常会有大量的被创建的字符串等待回收，将字符串常量池放到堆中，能够更高效及时地回收字符串内存。
 
 ```
-        String s1 = "a"; //若串池没有该字符串，则将该字符串加载到串池中 StringTable["a"]
-        String s2 = "b";  //StringTable["a","b"]
-        String s3 = "ab"; //StringTable["a","b","ab"]
-        String s4 = s1 + s2; //字符串变量拼接操作，new StringBuilder().append(a).append(b).toString()
-        //toString方法本质就是new String("ab") 在堆内存中
-        String s5 = "a" + "b";//编译优化 相当于s5 == "ab" 在串池中
-        System.out.println(s3 == s4);
-        System.out.println(s3 == s5);
+    String s1 = "a"; //若串池没有该字符串，则将该字符串加载到串池中 StringTable["a"]
+    String s2 = "b";  //StringTable["a","b"]
+    String s3 = "ab"; //StringTable["a","b","ab"]
+    String s4 = s1 + s2; //字符串变量拼接操作，new StringBuilder().append(a).append(b).toString()
+    //toString方法本质就是new String("ab") 在堆内存中
+    String s5 = "a" + "b";//编译优化 相当于s5 == "ab" 在串池中
+    System.out.println(s3 == s4);
+    System.out.println(s3 == s5);
 ```
 
 字符串intern操作
@@ -990,3 +990,5 @@ class MyClassLoader extends ClassLoader {
 `JDBC`通过启动类加载器加载`DriverManger`后，又通过线程上下文类加载器(启动类加载器)加载Jar包的MySQL驱动(一个线程创建完后，虚拟机会将应用程序类加载器放入线程上下文中，其他线程可以通过
 
 getContextClassLoader()方法 获取它)
+
+判断两个类是否相等，类名和类加载器都相同才算两个类相等。
